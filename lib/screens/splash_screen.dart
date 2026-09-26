@@ -266,14 +266,25 @@ class _SplashScreenState extends State<SplashScreen>
         profile = preloadedProfile ??
             await FirestoreService().getUser(user.uid);
       } on FirebaseException catch (e) {
-        // Firestore permission / network error — log details and show
-        // an in-place retry UI on the splash screen instead of
-        // navigating away to AuthScreen.
+        // Distinguish authorization problems from connectivity problems:
+        // showing "Connection Issue" for a permission-denied or
+        // missing-document error misleads the user into rebooting their
+        // router when the real problem is their account.
         debugPrint('SplashScreen: FirestoreException fetching profile '
             '(code=${e.code}, message=${e.message})');
         if (mounted) {
           setState(() {
-            _errorMessage = 'Could not load profile: ${e.message ?? e.code}';
+            _errorMessage = switch (e.code) {
+              'permission-denied' =>
+                'Your account does not have access to its profile record. '
+                    'If you are an authority or rescue user, contact your '
+                    'district office to have your account provisioned.',
+              'unavailable' || 'deadline-exceeded' || 'cancelled' =>
+                'Could not reach SATS servers. Check your internet '
+                    'connection and try again.',
+              _ =>
+                'Could not load profile: ${e.message ?? e.code}',
+            };
           });
         }
         return;
@@ -524,7 +535,9 @@ class _SplashScreenState extends State<SplashScreen>
           const SizedBox(height: 24),
 
           Text(
-            'Connection Issue',
+            _errorMessage!.startsWith('Could not reach')
+                ? 'Connection Issue'
+                : 'Account Problem',
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,

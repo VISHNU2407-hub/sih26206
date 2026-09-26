@@ -1,0 +1,63 @@
+{
+  "_comment": [
+    "SATS Disaster demo account config — COPY this file to tool/demo_accounts.json",
+    "and replace the placeholder emails with REAL Google account emails",
+    "(e.g. Gmail addresses) that you control. The app authenticates with",
+    "Google Sign-In ONLY, so each demo persona must be an actual Google",
+    "identity. tool/demo_accounts.json is git-ignored — never commit real",
+    "account emails you do not want public.",
+    "",
+    "Location scope rules:",
+    "  village_authority  → village + mandal + district all required",
+    "  district_authority → district required; mandal/village empty = whole district",
+    "  rescue             → mandal scope recommended; village empty = whole mandal",
+    "  citizen            → village + mandal + district all required",
+    "",
+    "These names MUST match the app's existing demo dataset geography",
+    "(lib/data/demo_seed_data.dart): district 'East Godavari', mandal",
+    "'Ambajipeta', villages incl. 'Mukkamala', 'Gangalakurru', 'Irusumanda'."
+  ],
+  "state": "Andhra Pradesh",
+  "accounts": [
+    {
+      "email": "your-real-gmail@gmail.com",
+      "name": "Demo Citizen",
+      "role": "citizen",
+      "phone": "9000002001",
+      "district": "East Godavari",
+      "mandal": "Ambajipeta",
+      "village": "Mukkamala",
+      "purpose": "Primary citizen: reports the incident shown to authorities."
+    },
+    {
+      "email": "your-second-real-gmail@gmail.com",
+      "name": "Demo Village Authority",
+      "role": "village_authority",
+      "phone": "9000001001",
+      "district": "East Godavari",
+      "mandal": "Ambajipeta",
+      "village": "Mukkamala",
+      "purpose": "Sees the Mukkamala incident in the village feed and triages it."
+    },
+    {
+      "email": "your-third-real-gmail@gmail.com",
+      "name": "Demo District Authority",
+      "role": "district_authority",
+      "phone": "9000001002",
+      "district": "East Godavari",
+      "mandal": "",
+      "village": "",
+      "purpose": "District-wide feed and alerts across all of East Godavari."
+    },
+    {
+      "email": "your-fourth-real-gmail@gmail.com",
+      "name": "Demo Rescue Team",
+      "role": "rescue",
+      "phone": "9000001003",
+      "district": "East Godavari",
+      "mandal": "Ambajipeta",
+      "village": "",
+      "purpose": "Mandal-scoped response: sees rescue-required incidents in Ambajipeta."
+    }
+  ]
+}

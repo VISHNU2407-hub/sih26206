@@ -135,7 +135,11 @@ export const sendEmergencySosPushToGuardians = functions.firestore
     //   - The app receives full emergency details to launch the
     //     EmergencyAlertActivity (data payload)
 
-    const payload: admin.messaging.Message = {
+    // Typed as a TokenMessage minus its `token` — the token is added per
+    // send below via spread. (The old `admin.messaging.Message` annotation
+    // is a union that requires `token`|`topic`|`condition` upfront, which
+    // this payload intentionally doesn't have yet.)
+    const payload: Omit<admin.messaging.TokenMessage, 'token'> = {
       notification: {
         title: '\uD83D\uDEA8 EMERGENCY SOS ALERT',
         body: `${victimName} has triggered an SOS alert and may be in danger.\nImmediate attention required.`,
@@ -163,8 +167,11 @@ export const sendEmergencySosPushToGuardians = functions.firestore
           defaultVibrateTimings: true,
           notificationCount: 1,
           // Use the alarm category so the system treats it
-          // as a high-importance event
-          eventTime: startedAtMillis,
+          // as a high-importance event. `eventTime` is a valid v1 payload
+          // field but is missing from this firebase-functions version's
+          // AndroidNotification type — pass it through a permissive cast
+          // so the payload stays byte-identical at runtime.
+          ...( { eventTime: startedAtMillis } as Record<string, unknown> ),
           ticker: `SOS Alert: ${victimName} needs help`,
         },
       },

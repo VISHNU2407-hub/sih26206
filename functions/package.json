@@ -5,7 +5,9 @@
     "build": "tsc",
     "serve": "npm run build && firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
+    "logs": "firebase functions:log",
+    "seed:demo-users": "npm run build && node lib/seedDemoUsers.js",
+    "seed:demo-users:dry": "npm run build && node lib/seedDemoUsers.js --dry-run"
   },
   "engines": {
     "node": "18"

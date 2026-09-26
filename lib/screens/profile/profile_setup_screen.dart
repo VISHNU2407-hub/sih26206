@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../models/user_model.dart';
 import '../../services/firestore_service.dart';
+import '../../utils/roles.dart';
 import '../../services/cloudinary_service.dart';
 
 import '../../theme/app_theme.dart';
@@ -38,7 +39,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final _dobController = TextEditingController();
   DateTime? _selectedDateOfBirth;
   String _selectedBloodGroup = '';
-  String _selectedRole = '';
+  // Self-signup is always a citizen (Firestore rules enforce role ==
+  // "citizen" at create; see the Role field below). _selectedRole is kept
+  // as a local so _saveProfile needs no changes.
+  final String _selectedRole = AppRoles.citizen;
   bool _isBloodDonor = false;
   bool _phoneFromAuth = false;
 
@@ -596,31 +600,32 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 const SizedBox(height: 16),
 
                 // Role Field
+                //
+                // SECURITY: self-signup may only ever create a citizen.
+                // Firestore rules reject any create with role != "citizen"
+                // (and role is immutable afterwards), so offering Admin here
+                // only produced a guaranteed permission-denied failure on
+                // save. Authority roles (village_authority, district_authority,
+                // rescue) are provisioned out-of-band via the Admin SDK
+                // (functions/src/seedDemoUsers.ts).
                 DropdownButtonFormField<String>(
-                  value: _selectedRole.isNotEmpty ? _selectedRole : null,
+                  initialValue: AppRoles.citizen,
                   decoration: InputDecoration(
                     labelText: 'Role',
                     prefixIcon: const Icon(Icons.person_outline),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
+                    helperText:
+                        'Authority roles are assigned by the district office',
                   ),
                   items: const [
                     DropdownMenuItem<String>(
-                      value: 'citizen',
+                      value: AppRoles.citizen,
                       child: Text('Citizen'),
                     ),
-                    DropdownMenuItem<String>(
-                      value: 'admin',
-                      child: Text('Admin'),
-                    ),
                   ],
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      _selectedRole = newValue ?? '';
-                    });
-                  },
-                  validator: (value) => validateRequired(value, 'Role'),
+                  onChanged: null, // fixed: role cannot self-escalate
                 ),
 
                 const SizedBox(height: 32),

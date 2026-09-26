@@ -43,3 +43,16 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Demo account provisioning — real Google account emails live here,
+# never commit them (see functions/src/seedDemoUsers.ts)
+tool/demo_accounts.json
+
+# Admin SDK service account keys — NEVER commit
+serviceAccount*.json
+service-account*.json
+*serviceAccountKey*.json
+functions/serviceAccount*.json
+
+# Cloud Functions compiled output (tsc)
+functions/lib/

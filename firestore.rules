@@ -1,0 +1,378 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ──────────────────────────────────────────────────────────────────────────
+    //  HELPER FUNCTIONS
+    // ──────────────────────────────────────────────────────────────────────────
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    function userData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // ── SATS Disaster roles ──
+    // role values: citizen | village_authority | district_authority | rescue | admin (legacy)
+    // Authority roles are provisioned out-of-band (Admin SDK / console).
+    // Self-signup can only ever create role == "citizen" (see /users create rule).
+    function userRole() {
+      return userData().role;
+    }
+
+    // Rescue teams are full authorities for the operations they are given in
+    // the app (Command nav: Incidents, Shelters, Alerts, Damage, Resources),
+    // so they must satisfy isAuthority() or every write they attempt from
+    // those screens is denied. They are deliberately NOT district-level
+    // (see isDistrictAuthority) so their read scope stays area-scoped.
+    function isAuthority() {
+      return userRole() == "village_authority"
+             || userRole() == "district_authority"
+             || userRole() == "rescue"
+             || userRole() == "admin";
+    }
+
+    function isDistrictAuthority() {
+      return userRole() == "district_authority" || userRole() == "admin";
+    }
+
+    function isRescueTeam() {
+      return userRole() == "rescue" || isAuthority();
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    //  DEFAULT — deny all unmatched paths
+    // ──────────────────────────────────────────────────────────────────────────
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    //  USERS
+    //  - Authenticated users may read any user document (needed for donor
+    //    search, admin lookup, phone lookup, notification targeting).
+    //  - Users may write only their own document.
+    //  - Role may be "citizen" or "admin" at creation time.
+    //  - Role field is immutable after creation — no changes allowed.
+    // ──────────────────────────────────────────────────────────────────────────
+
+    match /users/{userId} {
+
+      // Create: only self, and ONLY as "citizen".
+      // (Legacy rule allowed "admin" at creation; that hole is closed for the
+      // disaster platform — authority roles are provisioned via Admin SDK.)
+      allow create: if isAuthenticated()
+                    && isOwner(userId)
+                    && request.resource.data.role == "citizen";
+
+      // Read: authenticated users may read any profile (donor search,
+      // admin lookup, guardian phone lookup, notification targeting).
+      allow read: if isAuthenticated();
+
+      // Update: only self, prevent role escalation
+      allow update: if isAuthenticated()
+                    && isOwner(userId)
+                    && (!request.resource.data.keys().hasAny(["role"])
+                        || request.resource.data.role == resource.data.role);
+
+      // Delete: not implemented in app
+      allow delete: if false;
+
+      // ── Guardians subcollection ──
+      match /guardians/{guardianId} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+      }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    //  COMPLAINTS
+    //  - Any authenticated user may create a complaint.
+    //  - The complaint creator may read their own complaint.
+    //  - Admins may read complaints across the collection.
+    //  - The creator may update (add messages) their own complaint.
+    //  - Only admins may update complaint status.
+    //  - The creator may delete their own complaint.
+    // ──────────────────────────────────────────────────────────────────────────
+
+    match /complaints/{complaintId} {
+
+      allow create: if isAuthenticated();
+
+      allow read: if isAuthenticated()
+                   && (resource.data.userId == request.auth.uid
+                       || isAdmin());
+
+      allow update: if isAuthenticated()
+                     && (resource.data.userId == request.auth.uid
+                         || isAdmin());
+
+      allow delete: if isAuthenticated()
+                     && resource.data.userId == request.auth.uid;
+
+      // ── Complaint messages subcollection ──
+      match /messages/{messageId} {
+        allow read: if isAuthenticated()
+                     && (get(/databases/$(database)/documents/complaints/$(complaintId)).data.userId == request.auth.uid
+                         || isAdmin());
+        allow create: if isAuthenticated();
+        allow delete: if get(/databases/$(database)/documents/complaints/$(complaintId)).data.userId == request.auth.uid;
+        allow update: if false;
+      }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    //  COMMUNITY POSTS
+    //  - Any authenticated user may create posts.
+    //  - Any authenticated user may read posts.
+    //  - Only the original creator may update or delete their own post.
+    // ──────────────────────────────────────────────────────────────────────────
+
+    match /posts/{postId} {
+
+      allow create: if isAuthenticated();
+
+      allow read: if isAuthenticated();
+
+      // Owner can edit anything. Non-owner may only update reaction
+      // counter fields (like, dislike, heart) that toggleReaction()
+      // touches inside a Firestore transaction.
+      allow update: if isAuthenticated()
+                     && (resource.data.userId == request.auth.uid
+                         || request.resource.data.diff(resource.data)
+                             .affectedKeys()
+                             .hasOnly(["likeCount", "dislikeCount", "heartCount"]));
+
+      allow delete: if isAuthenticated()
+                     && resource.data.userId == request.auth.uid;
+
+      // ── Post reactions subcollection ──
+      // Document ID equals the reacting user's UID.
+      match /reactions/{userId} {
+        allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    //  PINNED POSTS
+    //  - Users may only pin/unpin on their own pinned_posts subcollection.
+    // ──────────────────────────────────────────────────────────────────────────
+
+    match /pinned_posts/{userId}/posts/{pinId} {
+      allow read, write: if isAuthenticated() && isOwner(userId);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    //  NOTIFICATIONS
+    //  - Notifications are created server-side via Cloud Functions or
+    //    batch writes (the client SDK does not call create directly
+    //    from user-facing code in a user-triggered way).
+    //  - Users may only read/update/delete notifications where
+    //    targetUserId matches their own UID.
+    //  - Mark-all-read and delete-all operations use server-side
+    //    filtering via `.where('targetUserId', ==, userId)`.
+    // ──────────────────────────────────────────────────────────────────────────
+
+    match /notifications/{notificationId} {
+
+      // Notifications are created by server code (batch writes from
+      // SOS, complaints, community posts, missing person alerts).
+      // The app writes directly from client code for simplicity.
+      // Allow create from authenticated users since write logic
+      // is in the app's service layer.
+      allow create: if isAuthenticated();
+
+      allow read: if isAuthenticated()
+                   && resource.data.targetUserId == request.auth.uid;
+
+      allow update: if isAuthenticated()
+                     && resource.data.targetUserId == request.auth.uid;
+
+      allow delete: if isAuthenticated()
+                     && resource.data.targetUserId == request.auth.uid;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    //  EMERGENCIES (SOS)
+    //  - Only the SOS initiator may read/update their own emergency.
+    //  - Any authenticated user may create an emergency (SOS).
+    //  - Delete is not supported.
+    // ──────────────────────────────────────────────────────────────────────────
+
+    match /emergencies/{emergencyId} {
+
+      allow create: if isAuthenticated()
+                     && request.resource.data.userId == request.auth.uid;
+
+      allow read: if isAuthenticated()
+                   && resource.data.userId == request.auth.uid;
+
+      allow update: if isAuthenticated()
+                     && resource.data.userId == request.auth.uid;
+
+      allow delete: if false;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    //  MISSING PERSON ALERTS
+    //  - Any authenticated user may create alerts.
+    //  - Any authenticated user may read alerts (public safety).
+    //  - The original creator may update or delete their own alert.
+    //  - Any user may mark an alert as "found safe" (status change).
+    // ──────────────────────────────────────────────────────────────────────────
+
+    match /missing_person_alerts/{alertId} {
+
+      allow create: if isAuthenticated();
+
+      allow read: if isAuthenticated();
+
+      // Creator can do any update; any authenticated user can mark
+      // found safe (status, foundAt, updatedAt fields only).
+      allow update: if isAuthenticated()
+                     && (resource.data.createdBy == request.auth.uid
+                         || request.resource.data.diff(resource.data)
+                             .affectedKeys()
+                             .hasOnly(["status", "foundAt", "updatedAt"]));
+
+      allow delete: if isAuthenticated()
+                     && resource.data.createdBy == request.auth.uid;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    //  HOSPITALS
+    //  - Seeded via standalone scripts. Read-only from client code.
+    // ──────────────────────────────────────────────────────────────────────────
+
+    match /hospitals/{hospitalId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    //  SATS DISASTER — DISASTERS
+    //  - All authenticated users may read disaster events (public safety:
+    //    citizens must see alerts for their area).
+    //  - Only authorities may create/update. Delete: not used (events close,
+    //    they are never removed).
+    // ──────────────────────────────────────────────────────────────────────────
+
+    match /disasters/{disasterId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthority();
+      allow delete: if false;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    //  SATS DISASTER — SHELTERS
+    //  - All authenticated users may read (citizens need shelter info).
+    //  - Only authorities may create/update/delete (shelter CRUD).
+    //  - update restricted to shelter fields only (management + location
+    //    block used by the full shelter edit form).
+    // ──────────────────────────────────────────────────────────────────────────
+
+    match /shelters/{shelterId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthority();
+      allow update: if isAuthority()
+                     && request.resource.data.diff(resource.data)
+                         .affectedKeys()
+                         .hasOnly(["occupancy", "status", "supplies",
+                                   "amenities", "capacity", "updatedBy",
+                                   "updatedAt", "contactPhone", "name",
+                                   "village", "mandal", "district",
+                                   "locationText", "latitude", "longitude"]);
+      allow delete: if isAuthority();
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    //  SATS DISASTER — INCIDENTS
+    //  - Any authenticated user may create (citizen reports); the creator
+    //    identity is enforced: reportedBy must equal the caller.
+    //  - Reporter reads own reports; authorities and rescue teams read all
+    //    (the dashboards need area-wide incident feeds).
+    //  - Status/assignment updates: authorities + rescue only, restricted to
+    //    triage fields. Reporters may not modify their report after submit
+    //    (immutability keeps the audit trail intact for the demo).
+    // ──────────────────────────────────────────────────────────────────────────
+
+    match /incidents/{incidentId} {
+      allow create: if isAuthenticated()
+                     && request.resource.data.reportedBy == request.auth.uid;
+
+      allow read: if isAuthority()
+                   || isRescueTeam()
+                   || (isAuthenticated()
+                       && resource.data.reportedBy == request.auth.uid);
+
+      allow update: if (isAuthority() || isRescueTeam())
+                     && request.resource.data.diff(resource.data)
+                         .affectedKeys()
+                         .hasOnly(["status", "assignedTo", "updatedBy",
+                                   "updatedAt"]);
+
+      allow delete: if false;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    //  SATS DISASTER — PREPAREDNESS
+    //  - Document ID is the village key. All authenticated users may read
+    //    (citizens see their village's preparedness).
+    //  - Only authorities may write (upsert via set+merge).
+    // ──────────────────────────────────────────────────────────────────────────
+
+    match /preparedness/{villageKey} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthority();
+      allow delete: if false;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    //  SATS DISASTER — DAMAGE ASSESSMENTS (Phase 5)
+    //  - All authenticated users may read (citizens see public recovery
+    //    progress for their village).
+    //  - Only authorities/rescue may create/update, and the recorded
+    //    reporter identity must be the caller (creator enforced like
+    //    incidents). Status = recorded ADMINISTRATIVE state only.
+    //  - Delete: not used (records are kept for the audit trail).
+    // ──────────────────────────────────────────────────────────────────────
+
+    match /damage_assessments/{assessmentId} {
+      allow read: if isAuthenticated();
+
+      // Creator identity is enforced at create time only (mirrors /incidents).
+      // Requiring it on update as well would make the status-advance workflow
+      // impossible: a second authority/rescue user has to be able to move a
+      // record through the flow that the original reporter started.
+      allow create: if (isAuthority() || isRescueTeam())
+                    && request.resource.data.reportedBy == request.auth.uid;
+
+      allow update: if isAuthority() || isRescueTeam();
+      allow delete: if false;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    //  SATS DISASTER — RELIEF RESOURCES (Phase 5)
+    //  - All authenticated users may read (citizens see public relief
+    //    availability for their village).
+    //  - Only authorities/rescue may create/update quantities and status.
+    //  - Delete: not used (records track the relief history).
+    // ──────────────────────────────────────────────────────────────────────
+
+    match /resources/{resourceId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthority() || isRescueTeam();
+      allow delete: if false;
+    }
+  }
+}

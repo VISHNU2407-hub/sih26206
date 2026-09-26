@@ -1,0 +1,76 @@
+{
+  "project_info": {
+    "project_number": "942480274228",
+    "project_id": "sats-disaster-sih",
+    "storage_bucket": "sats-disaster-sih.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:942480274228:android:fd1f977e6338ad59ae2b61",
+        "android_client_info": {
+          "package_name": "com.example.village_verse"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "942480274228-v4v02d5f7rngv1ltrafoupeomtiotm0m.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDt5WpTDa5mwxjAEpzIkdpQ9Y-Bkfm4Y2Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "942480274228-v4v02d5f7rngv1ltrafoupeomtiotm0m.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:942480274228:android:21e924a6bb959233ae2b61",
+        "android_client_info": {
+          "package_name": "com.sats.disaster"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "942480274228-ep4ondshb3clbbmv9ghtuo5duimmmuc6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sats.disaster",
+            "certificate_hash": "ab63fcd60b71fff21c6a431b3246d89e633db15c"
+          }
+        },
+        {
+          "client_id": "942480274228-v4v02d5f7rngv1ltrafoupeomtiotm0m.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDt5WpTDa5mwxjAEpzIkdpQ9Y-Bkfm4Y2Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "942480274228-v4v02d5f7rngv1ltrafoupeomtiotm0m.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

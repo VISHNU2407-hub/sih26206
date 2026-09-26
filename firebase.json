@@ -1,0 +1,32 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "village-assistance-app",
+          "appId": "1:954809297748:android:bb5faa2b87f37c4c7436c1",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "village-assistance-app",
+          "configurations": {
+            "android": "1:954809297748:android:bb5faa2b87f37c4c7436c1",
+            "ios": "1:954809297748:ios:420e3485f15168fc7436c1",
+            "macos": "1:954809297748:ios:420e3485f15168fc7436c1",
+            "web": "1:954809297748:web:bbd2fb040d1dd5f87436c1",
+            "windows": "1:954809297748:web:bcf0ddfcac881ef77436c1"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  }
+}
